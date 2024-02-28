@@ -1,0 +1,83 @@
+name: LRA coordinator
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [17, 21]
+
+    name: Build with JDK ${{ matrix.java }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v2
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+          cache: maven
+          check-latest: true
+      - name: Build and Test with Java ${{ matrix.java }}
+        run: mvn -B verify
+
+  integration-verification:
+    runs-on: ubuntu-latest
+    name: Integration verification with Quarkus
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-java@v2
+        with:
+          java-version: 17
+          distribution: temurin
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B install
+
+      - name: Checkout Quarkus
+        uses: actions/checkout@v2
+        with:
+          repository: quarkusio/quarkus
+          path: ./quarkus
+
+      - name: Quarkus integration
+        working-directory: ./quarkus
+        run: |
+          mvn -Dquickly
+          java -jar ../target/quarkus-app/quarkus-run.jar &
+          mvn clean verify -pl tcks/microprofile-lra -Dtcks -Dlra.coordinator.url=http://localhost:8080/lra-coordinator
+          kill %1
+
+  test-containers:
+    runs-on: ubuntu-latest
+    name: Integration verification with Quarkus and test-containers
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-java@v2
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B install
+
+      - name: Checkout Quarkus
+        uses: actions/checkout@v2
+        with:
+          repository: quarkusio/quarkus
+          path: ./quarkus
+
+      - name: Quarkus integration
+        working-directory: ./quarkus
+        run: |
+          mvn -Dquickly
+          mvn clean install -pl tcks/microprofile-lra -Dtcks -Dstart-containers -Dtest-containers
+          kill %1
